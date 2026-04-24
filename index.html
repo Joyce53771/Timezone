@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的全球协作时区表</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .hour-cell { min-width: 45px; height: 40px; display: flex; align-items: center; justify-content: center; border: 1px solid #e5e7eb; cursor: pointer; }
+        .hour-cell:hover { background-color: #f3f4f6; }
+        .is-night { background-color: #1e293b; color: white; }
+        .is-work { background-color: #fef9c3; }
+        .selected-hour { border: 2px solid #3b82f6 !important; background-color: #dbeafe; }
+    </style>
+</head>
+<body class="bg-gray-50 p-4 md:p-10">
+
+<div class="max-w-6xl mx-auto bg-white shadow-lg rounded-xl p-6">
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">全球协作时区工具</h1>
+    
+    <div class="flex flex-wrap gap-4 mb-8">
+        <select id="tzSelector" class="border rounded p-2 flex-grow">
+            <option value="Asia/Shanghai">北京/上海 (CST)</option>
+            <option value="Europe/London">伦敦 (GMT/BST)</option>
+            <option value="America/New_York">纽约 (EST/EDT)</option>
+            <option value="Asia/Tokyo">东京 (JST)</option>
+            <option value="Europe/Berlin">柏林 (CET)</option>
+            <option value="America/Los_Angeles">洛杉矶 (PST)</option>
+        </select>
+        <button onclick="addTimezone()" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition">添加时区</button>
+    </div>
+
+    <div id="timezoneList" class="space-y-4">
+        </div>
+</div>
+
+<script>
+    let zones = JSON.parse(localStorage.getItem('myZones')) || [
+        { id: 'Asia/Shanghai', note: '我的本地时间' }
+    ];
+
+    function save() {
+        localStorage.setItem('myZones', JSON.stringify(zones));
+    }
+
+    function addTimezone() {
+        const select = document.getElementById('tzSelector');
+        const id = select.value;
+        if (!zones.find(z => z.id === id)) {
+            zones.push({ id, note: '' });
+            save();
+            render();
+        }
+    }
+
+    function removeZone(id) {
+        zones = zones.filter(z => z.id !== id);
+        save();
+        render();
+    }
+
+    function updateNote(id, val) {
+        const zone = zones.find(z => z.id === id);
+        if (zone) zone.note = val;
+        save();
+    }
+
+    function render() {
+        const container = document.getElementById('timezoneList');
+        container.innerHTML = '';
+
+        zones.forEach(zone => {
+            const now = new Date();
+            const formatter = new Intl.DateTimeFormat('zh-CN', {
+                timeZone: zone.id,
+                hour: '2-digit', minute: '2-digit', hour12: false
+            });
+            const timeStr = formatter.format(now);
+
+            const row = document.createElement('div');
+            row.className = "flex flex-col md:flex-row items-center border-b pb-4 gap-4";
+            row.innerHTML = `
+                <div class="w-full md:w-48">
+                    <div class="font-bold text-lg">${zone.id.split('/')[1]}</div>
+                    <div class="text-sm text-gray-500">${zone.id}</div>
+                    <div class="text-xl text-blue-600 font-mono">${timeStr}</div>
+                </div>
+                <div class="flex-grow overflow-x-auto flex no-scrollbar">
+                    ${Array.from({length: 24}).map((_, i) => {
+                        const h = i;
+                        const style = (h < 8 || h > 19) ? 'is-night' : (h >= 9 && h <= 17 ? 'is-work' : '');
+                        return `<div class="hour-cell text-xs ${style}">${h}:00</div>`;
+                    }).join('')}
+                </div>
+                <div class="w-full md:w-48 flex gap-2">
+                    <input type="text" placeholder="备注姓名/职责" value="${zone.note}" 
+                           oninput="updateNote('${zone.id}', this.value)"
+                           class="border-b focus:border-blue-500 outline-none text-sm w-full">
+                    <button onclick="removeZone('${zone.id}')" class="text-red-400 hover:text-red-600">✕</button>
+                </div>
+            `;
+            container.appendChild(row);
+        });
+    }
+
+    render();
+    // 每分钟刷新一次时间
+    setInterval(render, 60000);
+</script>
+</body>
+</html>
