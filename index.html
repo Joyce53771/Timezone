@@ -3,109 +3,169 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的全球协作时区表</title>
+    <title>Global TimeSync Pro | 全球时区同步</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .hour-cell { min-width: 45px; height: 40px; display: flex; align-items: center; justify-content: center; border: 1px solid #e5e7eb; cursor: pointer; }
-        .hour-cell:hover { background-color: #f3f4f6; }
-        .is-night { background-color: #1e293b; color: white; }
-        .is-work { background-color: #fef9c3; }
-        .selected-hour { border: 2px solid #3b82f6 !important; background-color: #dbeafe; }
+        .hour-cell { min-width: 50px; height: 45px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #e5e7eb; font-size: 11px; }
+        /* 颜色逻辑 */
+        .color-work { background-color: #fef9c3; color: #854d0e; } /* 9-18 黄色 */
+        .color-evening { background-color: #e0f2fe; color: #0369a1; } /* 18-22 浅蓝 */
+        .color-sleep { background-color: #1e3a8a; color: #ffffff; } /* 22-8 深蓝 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
-<body class="bg-gray-50 p-4 md:p-10">
+<body class="bg-slate-100 p-4">
 
-<div class="max-w-6xl mx-auto bg-white shadow-lg rounded-xl p-6">
-    <h1 class="text-2xl font-bold mb-6 text-gray-800">全球协作时区工具</h1>
-    
-    <div class="flex flex-wrap gap-4 mb-8">
-        <select id="tzSelector" class="border rounded p-2 flex-grow">
-            <option value="Asia/Shanghai">北京/上海 (CST)</option>
-            <option value="Europe/London">伦敦 (GMT/BST)</option>
-            <option value="America/New_York">纽约 (EST/EDT)</option>
-            <option value="Asia/Tokyo">东京 (JST)</option>
-            <option value="Europe/Berlin">柏林 (CET)</option>
-            <option value="America/Los_Angeles">洛杉矶 (PST)</option>
-        </select>
-        <button onclick="addTimezone()" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition">添加时区</button>
+<div class="max-w-7xl mx-auto bg-white shadow-2xl rounded-2xl overflow-hidden">
+    <div class="p-6 border-b bg-slate-50">
+        <h1 class="text-2xl font-bold text-slate-800">🌍 全球协作时区表 <span class="text-sm font-normal text-slate-500 ml-2">Global TimeSync Pro</span></h1>
+        
+        <div class="mt-6 flex flex-wrap gap-4">
+            <select id="tzSelector" class="border rounded-lg p-2 flex-grow bg-white shadow-sm text-sm">
+                </select>
+            <button onclick="addTimezone()" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition font-medium">
+                添加时区 / Add
+            </button>
+        </div>
     </div>
 
-    <div id="timezoneList" class="space-y-4">
+    <div class="hidden md:flex bg-slate-200 px-6 py-2 text-xs font-bold text-slate-600 uppercase tracking-wider">
+        <div class="w-64">城市与时区 / City & Time</div>
+        <div class="flex-grow text-center">24小时趋势 / 24H Timeline</div>
+        <div class="w-64 ml-4">固定备注 / Fixed Notes</div>
+    </div>
+
+    <div id="timezoneList" class="divide-y divide-slate-100">
         </div>
 </div>
 
 <script>
-    let zones = JSON.parse(localStorage.getItem('myZones')) || [
-        { id: 'Asia/Shanghai', note: '我的本地时间' }
+    /**
+     * 【重点：在这里修改你的名单】
+     * 只要在这里按照格式添加，备注就会永久固定在代码里
+     */
+    const FIXED_CONTACTS = [
+        { id: 'Asia/Shanghai', note: '我 (本地) / Me (Local)' },
+        { id: 'America/Los_Angeles', note: '技术支持 - Jack / Tech Support' },
+        { id: 'Europe/London', note: '客户经理 - Sarah / Account Manager' },
+        { id: 'Asia/Tokyo', note: '仓库 - 田中 / Warehouse' }
     ];
 
-    function save() {
-        localStorage.setItem('myZones', JSON.stringify(zones));
-    }
+    // 获取全球所有时区列表并排序
+    const allTimezones = Intl.supportedValuesOf('timeZone').map(tz => {
+        const now = new Date();
+        const offset = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' }).formatToParts(now).find(p => p.type === 'timeZoneName').value;
+        return { id: tz, offset: offset };
+    }).sort((a, b) => {
+        const extract = (s) => {
+            const m = s.match(/([+-])(\d+):(\d+)/);
+            if (!m) return 0;
+            return (m[1] === '+' ? 1 : -1) * (parseInt(m[2]) * 60 + parseInt(m[3]));
+        };
+        return extract(a.offset) - extract(b.offset);
+    });
 
-    function addTimezone() {
-        const select = document.getElementById('tzSelector');
-        const id = select.value;
-        if (!zones.find(z => z.id === id)) {
-            zones.push({ id, note: '' });
-            save();
-            render();
-        }
-    }
+    // 初始化下拉框
+    const selector = document.getElementById('tzSelector');
+    allTimezones.forEach(tz => {
+        const option = document.createElement('option');
+        option.value = tz.id;
+        // 显示格式：GMT+8 - Asia/Shanghai
+        option.textContent = `${tz.offset} - ${tz.id}`;
+        selector.appendChild(option);
+    });
 
-    function removeZone(id) {
-        zones = zones.filter(z => z.id !== id);
-        save();
-        render();
-    }
-
-    function updateNote(id, val) {
-        const zone = zones.find(z => z.id === id);
-        if (zone) zone.note = val;
-        save();
-    }
-
+    // 初始化数据（优先从 FIXED_CONTACTS 读取）
+    let userZones = JSON.parse(localStorage.getItem('addedZones')) || [];
+    
     function render() {
         const container = document.getElementById('timezoneList');
         container.innerHTML = '';
 
-        zones.forEach(zone => {
+        // 合并固定名单和用户临时添加的名单
+        const combinedZones = [...FIXED_CONTACTS];
+        userZones.forEach(uz => {
+            if (!combinedZones.find(cz => cz.id === uz.id)) combinedZones.push(uz);
+        });
+
+        combinedZones.forEach(zone => {
             const now = new Date();
-            const formatter = new Intl.DateTimeFormat('zh-CN', {
-                timeZone: zone.id,
-                hour: '2-digit', minute: '2-digit', hour12: false
-            });
-            const timeStr = formatter.format(now);
+            
+            // 获取各种格式的时间信息
+            const timeFormatter = new Intl.DateTimeFormat('zh-CN', { timeZone: zone.id, hour: '2-digit', minute: '2-digit', hour12: false });
+            const dateFormatter = new Intl.DateTimeFormat('zh-CN', { timeZone: zone.id, month: 'short', day: 'numeric', weekday: 'short' });
+            const enTzName = new Intl.DateTimeFormat('en-US', { timeZone: zone.id, timeZoneName: 'long' }).formatToParts(now).find(p => p.type === 'timeZoneName').value;
+            const zhTzName = new Intl.DateTimeFormat('zh-CN', { timeZone: zone.id, timeZoneName: 'long' }).formatToParts(now).find(p => p.type === 'timeZoneName').value;
 
             const row = document.createElement('div');
-            row.className = "flex flex-col md:flex-row items-center border-b pb-4 gap-4";
+            row.className = "flex flex-col md:flex-row items-center p-6 gap-4 hover:bg-slate-50 transition";
+            
+            // 颜色判断函数
+            const getCellClass = (h) => {
+                if (h >= 9 && h < 18) return 'color-work';
+                if (h >= 18 && h < 22) return 'color-evening';
+                return 'color-sleep';
+            };
+
+            // 生成24小时刻度
+            let hoursHtml = '';
+            const baseDate = new Date();
+            for(let i=0; i<24; i++) {
+                // 计算该时区当前日期的0点开始的24小时
+                const tempDate = new Date(new Date().toLocaleString("en-US", {timeZone: zone.id}));
+                tempDate.setHours(i, 0, 0, 0);
+                const h = tempDate.getHours();
+                hoursHtml += `<div class="hour-cell ${getCellClass(h)}"><span>${h}:00</span></div>`;
+            }
+
             row.innerHTML = `
-                <div class="w-full md:w-48">
-                    <div class="font-bold text-lg">${zone.id.split('/')[1]}</div>
-                    <div class="text-sm text-gray-500">${zone.id}</div>
-                    <div class="text-xl text-blue-600 font-mono">${timeStr}</div>
+                <div class="w-full md:w-64 flex-shrink-0">
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold text-lg text-slate-800">${zone.id.split('/').pop().replace('_', ' ')}</span>
+                    </div>
+                    <div class="text-xs text-slate-500 font-medium uppercase mt-1">${enTzName}</div>
+                    <div class="text-xs text-indigo-600 font-medium">${zhTzName}</div>
+                    <div class="mt-2 flex items-baseline gap-2">
+                        <span class="text-2xl font-mono font-bold text-slate-900">${timeFormatter.format(now)}</span>
+                        <span class="text-sm text-slate-500">${dateFormatter.format(now)}</span>
+                    </div>
                 </div>
-                <div class="flex-grow overflow-x-auto flex no-scrollbar">
-                    ${Array.from({length: 24}).map((_, i) => {
-                        const h = i;
-                        const style = (h < 8 || h > 19) ? 'is-night' : (h >= 9 && h <= 17 ? 'is-work' : '');
-                        return `<div class="hour-cell text-xs ${style}">${h}:00</div>`;
-                    }).join('')}
+                
+                <div class="flex-grow w-full overflow-x-auto flex no-scrollbar border rounded-lg shadow-sm">
+                    ${hoursHtml}
                 </div>
-                <div class="w-full md:w-48 flex gap-2">
-                    <input type="text" placeholder="备注姓名/职责" value="${zone.note}" 
-                           oninput="updateNote('${zone.id}', this.value)"
-                           class="border-b focus:border-blue-500 outline-none text-sm w-full">
-                    <button onclick="removeZone('${zone.id}')" class="text-red-400 hover:text-red-600">✕</button>
+
+                <div class="w-full md:w-64 flex flex-col gap-2">
+                    <div class="text-sm text-slate-600 bg-slate-100 p-2 rounded border-l-4 border-indigo-500 italic">
+                        ${zone.note || '点击添加备注...'}
+                    </div>
+                    ${!FIXED_CONTACTS.some(f => f.id === zone.id) ? 
+                        `<button onclick="removeZone('${zone.id}')" class="text-xs text-red-400 text-left hover:text-red-600 underline">移除该时区 / Remove</button>` : 
+                        `<span class="text-[10px] text-slate-400 text-right uppercase tracking-tighter">固定联系人 / Member</span>`
+                    }
                 </div>
             `;
             container.appendChild(row);
         });
     }
 
+    function addTimezone() {
+        const id = document.getElementById('tzSelector').value;
+        if (!userZones.find(z => z.id === id)) {
+            userZones.push({ id, note: '临时添加 / Added' });
+            localStorage.setItem('addedZones', JSON.stringify(userZones));
+            render();
+        }
+    }
+
+    function removeZone(id) {
+        userZones = userZones.filter(z => z.id !== id);
+        localStorage.setItem('addedZones', JSON.stringify(userZones));
+        render();
+    }
+
     render();
-    // 每分钟刷新一次时间
-    setInterval(render, 60000);
+    setInterval(render, 30000); // 每30秒刷新一次时间
 </script>
 </body>
 </html>
